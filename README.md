@@ -4,12 +4,12 @@
 It leverages go generics and provides simpler more minimal API for creating
 flags.
 
-The minimal API is created by using the generics functionality added in
-1.18. The main difference between the flag module in standard library and
-miniflag is that all the flags defined in miniflag are setup using just a
-single function. For example creating integer and boolean values in
-standard library requires using two different function calls `Int()` and
-`Bool()`, whereas in miniflag you only use one `Flag()`.
+The minimal API is created by using the generics functionality added in 1.18.
+The main difference between the flag module in standard library and miniflag is
+that all the flags defined in miniflag are setup using just a single function.
+For example creating integer and boolean values in standard library requires
+using two different function calls `Int()` and `Bool()`, whereas in miniflag
+you only use one `Flag()`.
 
 With miniflag shorthands are created as separate flag definitions, but will
 hold the pointer reference to the same variable.
@@ -63,6 +63,21 @@ Run tests by running:
 go test github.com/erikjuhani/miniflag
 ```
 
+## Benchmarks
+
+The native implementation in go standard library is marginally more performant
+than miniflag about ~70ns/op. Compared to pflag, miniflag is much closer to
+standard library flag implementation's performance.
+
+```
+goos: darwin
+goarch: arm64
+pkg: github.com/erikjuhani/miniflag
+BenchmarkGoFlagMultipleFlagsAndParse-8           2222703               517.9 ns/op           929 B/op          14 allocs/op
+BenchmarkMiniFlagMultipleFlagsAndParse-8         2031046               580.4 ns/op           929 B/op          14 allocs/op
+BenchmarkPFlagMultipleFlagsAndParse-8            1964179               641.6 ns/op          1449 B/op          18 allocs/op
+```
+
 ## Usage
 
 Define flags using `miniflag.Flag()` or `miniflag.SetFlag()`. The API is
@@ -78,16 +93,15 @@ var nFlag = miniflag.Flag("n", "", 1234, "help message for flag n")
 // Inferred as *int type
 ```
 
-Or you can create custom flags that satisfy the Value interface and couple
-them to flag parsing by:
+Or you can create custom flags that satisfy the Value interface and couple them
+to flag parsing by:
 
 ```go
 var namesFlag = miniflag.Flag("names", "n", StringSliceFlag{}, "help message for names flag")
 // Inferred as *StringSliceFlag
 ```
 
-For such flags, the default value is just the initial value of the
-variable.
+For such flags, the default value is just the initial value of the variable.
 
 After all flags are defined, call:
 
@@ -96,6 +110,10 @@ miniflag.Parse()
 ```
 
 to parse the command line into the defined flags.
+
+`miniflag.Parse` works for all flag sets and are internally checked from
+command arguments This means that you do not need to call `flagset.Parse`
+separately for each flag set.
 
 ### Setting flags to flagsets
 

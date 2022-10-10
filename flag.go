@@ -25,7 +25,7 @@
 	This declares an integer flag, -n, stored in the pointer nFlag, with type *int:
 
 		import "github.com/erikjuhani/miniflag"
-		var nFlag = miniflag.New("n", "", 1234, "help message for flag n")
+		var nFlag = miniflag.Flag("n", "", 1234, "help message for flag n")
 
 	Or you can create custom flags that satisfy the Value interface and couple
 	them to flag parsing by:
@@ -55,7 +55,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -77,7 +76,11 @@ var (
 	// CommandLine is the default set of command-line flags, parsed from
 	// os.Args.
 	CommandLine = NewFlagSet(os.Args[0], ExitOnError)
-	flagSets    = map[string]*FlagSet[any]{}
+	// Setup capacity for optimized performance
+	flagSets = make(map[string]FlagSet[any], 8)
+	// Increase performance by pre-allocating slice capacity
+	// flagInfoSlice is used in new FlagSet creation
+	flagInfoSlice = make([]flagInfo, 0, 32)
 )
 
 // A FlagSet represents a set of defined flags. The zero value of a FlagSet has
@@ -91,6 +94,10 @@ type FlagSet[T any] struct {
 	flags []flagInfo
 	// TODO: move flagSets into FlagSet
 	// Sub flagsets are commands for parent flagset/command
+}
+
+func (fs *FlagSet[T]) Usage() {
+	usageFn(fs, fs.Name())
 }
 
 // SetFlag defines a new flag to a given FlagSet.
@@ -108,10 +115,9 @@ func Flag[T any](name string, shorthand string, value T, usage string) *T {
 // NewFlagSet returns a new, empty flag set with the specified name and error
 // handling property.
 func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet[any] {
-	fs := &FlagSet[any]{flag.NewFlagSet(name, errorHandling), []flagInfo{}}
-	fs.Usage = func() { usageFn(fs, name) }
-	flagSets[fs.Name()] = fs
-	return fs
+	fs := FlagSet[any]{flag.NewFlagSet(name, errorHandling), flagInfoSlice}
+	flagSets[name] = fs
+	return &fs
 }
 
 // Args returns non-flag arguments.
@@ -132,10 +138,10 @@ type flagInfo struct {
 }
 
 func parse(fs *FlagSet[any], args []string) error {
-	if len(args) > 0 {
-		n := args[0]
-		if fs, ok := flagSets[n]; ok {
-			return fs.Parse(args[1:])
+	l := len(args)
+	if l > 1 {
+		if f, ok := flagSets[args[0]]; ok {
+			return f.Parse(args[1:])
 		}
 	}
 	return fs.Parse(args)
@@ -168,10 +174,12 @@ func args(fs *FlagSet[any]) []string {
 }
 
 func defineFlag[T any](fs *FlagSet[any], name string, shorthand string, value T, usage string) *T {
-	defineUsage(&fs.flags, name, shorthand, usage)
 	if name == shorthand {
 		shorthand = ""
 	}
+
+	defineUsage(&fs.flags, name, shorthand, usage)
+
 	switch v := any(value).(type) {
 	case bool:
 		return any((boolVar(fs, name, shorthand, v, usage))).(*T)
@@ -245,17 +253,30 @@ func usageFn[T any](fs *FlagSet[T], name string) {
 	fmt.Fprint(fs.Output(), s.String(), "\n", u.String())
 }
 
+// TODO: Maybe this can be optimized
+// Extract usage value from the usage text. Looks for the first occurrance
+// between backtick characters
+func extractUsageValue(s string) string {
+	var pos int
+
+	for i := 0; i < len(s); i++ {
+		if s[i] == '`' {
+			if pos == 0 {
+				pos = i + 1
+				continue
+			}
+			return s[pos:i]
+		}
+	}
+
+	return ""
+}
+
 func defineUsage(flags *[]flagInfo, name string, shorthand string, usage string) {
 	if len(name) == 1 {
 		shorthand = name
 		name = ""
 	}
-
-	// Parse usage value from the usage text. Looks for the first occurrence
-	// between ``
-	re := regexp.MustCompile("`.*`")
-	m := re.FindString(usage)
-	val := strings.ReplaceAll(m, "`", "")
 
 	*flags = append(
 		*flags,
@@ -263,7 +284,7 @@ func defineUsage(flags *[]flagInfo, name string, shorthand string, usage string)
 			Longhand:   name,
 			Shorthand:  shorthand,
 			Usage:      usage,
-			UsageValue: val,
+			UsageValue: extractUsageValue(usage),
 		},
 	)
 }

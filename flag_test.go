@@ -12,6 +12,7 @@ func TestParse(t *testing.T) {
 		args     []string
 		expected bool
 	}{
+		{},
 		{
 			args:     []string{"-b"},
 			expected: true,
@@ -25,7 +26,7 @@ func TestParse(t *testing.T) {
 	for _, tt := range tests {
 		fs := NewFlagSet("foo", ContinueOnError)
 		t.Run("", func(t *testing.T) {
-			actual := SetFlag(fs, "b", "b", false, "")
+			actual := SetFlag(fs, "b", "", false, "")
 
 			if err := parse(fs, tt.args); err != nil {
 				t.Fatal(err)
