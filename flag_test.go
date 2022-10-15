@@ -509,13 +509,14 @@ func TestUsage(t *testing.T) {
 					Usage:     "Usage for d",
 				},
 				{
-					Longhand:  "ee",
-					Shorthand: "e",
-					Usage:     "Usage for e",
+					Longhand:   "ee",
+					Shorthand:  "e",
+					Usage:      "Usage for e",
+					UsageValue: "bool",
 				},
 			},
 			expected: `usage: test [-a --aa] [-b --bb] [-c --cc] [-d --dd]
-            [-e --ee]
+            [-e --ee=bool]
     -a --aa         Usage for a
     -b --bb         Usage for b
     -c --cc         Usage for c

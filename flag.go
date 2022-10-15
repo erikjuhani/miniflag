@@ -60,12 +60,12 @@ import (
 )
 
 // ErrorHandling defines how FlagSet.Parse behaves if the parse fails.
-// NOTE: Direct reference to std.
+// NOTE: Direct reference to standard library.
 type ErrorHandling = flag.ErrorHandling
 
 // These constants cause FlagSet.Parse to behave as described if the parse
 // fails.
-// NOTE: Direct reference to std.
+// NOTE: Direct reference to standard library.
 const (
 	ContinueOnError ErrorHandling = flag.ContinueOnError // Return a descriptive error.
 	ExitOnError                   = flag.ExitOnError     // Call os.Exit(2) or for -h/-help Exit(0).
@@ -96,8 +96,8 @@ type FlagSet[T any] struct {
 	// Sub flagsets are commands for parent flagset/command
 }
 
-func (fs *FlagSet[T]) Usage() {
-	usageFn(fs, fs.Name())
+func (fs *FlagSet[T]) defaultUsage() {
+	usage(fs)
 }
 
 // SetFlag defines a new flag to a given FlagSet.
@@ -105,9 +105,10 @@ func SetFlag[T any](fs *FlagSet[any], name string, shorthand string, value T, us
 	return defineFlag(fs, name, shorthand, value, usage)
 }
 
-// Flag defines a new flag for CommandLine with the given name, shorthand, usage
-// and value. Value type is inferred from the given value. Shorthand for the
-// flag is only created if passed shorthand parameter is not an empty string.
+// Flag defines a new flag for CommandLine with the given name, shorthand,
+// usage and value. Value type is inferred from the given value. Shorthand for
+// the flag is only created if passed shorthand parameter is not an empty
+// string.
 func Flag[T any](name string, shorthand string, value T, usage string) *T {
 	return defineFlag(CommandLine, name, shorthand, value, usage)
 }
@@ -115,7 +116,9 @@ func Flag[T any](name string, shorthand string, value T, usage string) *T {
 // NewFlagSet returns a new, empty flag set with the specified name and error
 // handling property.
 func NewFlagSet(name string, errorHandling ErrorHandling) *FlagSet[any] {
-	fs := FlagSet[any]{flag.NewFlagSet(name, errorHandling), flagInfoSlice}
+	fs := FlagSet[any]{&flag.FlagSet{}, flagInfoSlice}
+	fs.Usage = fs.defaultUsage
+	fs.Init(name, errorHandling)
 	flagSets[name] = fs
 	return &fs
 }
@@ -173,6 +176,9 @@ func args(fs *FlagSet[any]) []string {
 	return pArgs
 }
 
+// defineFlag defines a flag for given flag set. if shorthand parameter is not
+// an empty string and name parameter is not the same, additional flag is
+// defined for the shorthand.
 func defineFlag[T any](fs *FlagSet[any], name string, shorthand string, value T, usage string) *T {
 	if name == shorthand {
 		shorthand = ""
@@ -203,10 +209,10 @@ func defineFlag[T any](fs *FlagSet[any], name string, shorthand string, value T,
 	return nil
 }
 
-func usageFn[T any](fs *FlagSet[T], name string) {
+func usage[T any](fs *FlagSet[T]) {
 	var s, u strings.Builder
 
-	s.WriteString("usage: " + name)
+	s.WriteString("usage: " + fs.Name())
 
 	p := s.Len()
 
@@ -253,31 +259,7 @@ func usageFn[T any](fs *FlagSet[T], name string) {
 	fmt.Fprint(fs.Output(), s.String(), "\n", u.String())
 }
 
-// TODO: Maybe this can be optimized
-// Extract usage value from the usage text. Looks for the first occurrance
-// between backtick characters
-func extractUsageValue(s string) string {
-	var pos int
-
-	for i := 0; i < len(s); i++ {
-		if s[i] == '`' {
-			if pos == 0 {
-				pos = i + 1
-				continue
-			}
-			return s[pos:i]
-		}
-	}
-
-	return ""
-}
-
 func defineUsage(flags *[]flagInfo, name string, shorthand string, usage string) {
-	if len(name) == 1 {
-		shorthand = name
-		name = ""
-	}
-
 	*flags = append(
 		*flags,
 		flagInfo{
@@ -287,6 +269,18 @@ func defineUsage(flags *[]flagInfo, name string, shorthand string, usage string)
 			UsageValue: extractUsageValue(usage),
 		},
 	)
+}
+
+// Extract usage value from the usage text. Looks for the first occurrance
+// between backtick characters
+func extractUsageValue(s string) string {
+	if i := strings.IndexByte(s, '`'); i >= 0 {
+		s = s[i:]
+		if j := strings.IndexByte(s, '`'); j >= 0 {
+			return s[:j]
+		}
+	}
+	return ""
 }
 
 func boolVar(fs *FlagSet[any], name string, shorthand string, value bool, usage string) *bool {
