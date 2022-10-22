@@ -275,7 +275,7 @@ func defineUsage(flags *[]flagInfo, name string, shorthand string, usage string)
 // between backtick characters
 func extractUsageValue(s string) string {
 	if i := strings.IndexByte(s, '`'); i >= 0 {
-		s = s[i:]
+		s = s[i+1:]
 		if j := strings.IndexByte(s, '`'); j >= 0 {
 			return s[:j]
 		}
